@@ -31,6 +31,10 @@ export async function loadMonitorConfigs(
 
   for await (const entry of expandGlob(pattern, { includeDirs: false })) {
     try {
+      // Monitor files live in the consumer's project, not this package, so
+      // the import target can't exist at publish time and isn't part of
+      // this package's module graph.
+      // deno-lint-ignore unanalyzable-dynamic-import
       const mod = await import(toFileUrl(entry.path).href);
       if (mod.default === undefined) continue;
       const parsed = v.parse(
