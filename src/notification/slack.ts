@@ -1,38 +1,38 @@
 import type {
-  BaseNotificationEndpointConfig,
-  MonitorNotifyContext,
-  NotificationChannel,
-  NotificationMessage,
+  ChannelFactory,
+  NotificationEvent,
 } from "../types/notification.ts";
+import { defineChannel } from "./define-channel.ts";
+import { defaultMessage } from "./format.ts";
 
-export interface SlackEndpointConfig
-  extends BaseNotificationEndpointConfig<"slack"> {
+export interface SlackEndpointConfig {
   webhookUrl: string;
 }
 
-function defaultSendOnDown(
-  _config: SlackEndpointConfig,
-  ctx: MonitorNotifyContext,
-): NotificationMessage {
-  return { title: `Service is down: ${ctx.name}`, description: ctx.message };
+export interface SlackMessage {
+  title: string;
+  description: string;
+  /** Raw Block Kit blocks. When set, the channel sends these instead of text. */
+  blocks?: unknown[];
 }
 
-function defaultSendOnUp(
+function defaultFormat(
   _config: SlackEndpointConfig,
-  ctx: MonitorNotifyContext,
-): NotificationMessage {
-  return { title: `Service ${ctx.name} is up again`, description: ctx.message };
+  event: NotificationEvent,
+): SlackMessage {
+  return defaultMessage(event);
 }
 
 function dispatch(
   _config: SlackEndpointConfig,
-  _message: NotificationMessage,
+  _message: SlackMessage,
 ): Promise<void> {
   throw new Error("The slack notification channel is not implemented yet.");
 }
 
-export const slackChannel: NotificationChannel<SlackEndpointConfig> = {
-  defaultSendOnDown,
-  defaultSendOnUp,
-  dispatch,
-};
+export const slack: ChannelFactory<SlackEndpointConfig, SlackMessage> =
+  defineChannel({
+    type: "slack",
+    defaultFormat,
+    dispatch,
+  });

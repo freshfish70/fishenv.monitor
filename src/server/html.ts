@@ -2,6 +2,7 @@ import type {
   CheckResultRow,
   MonitorAggregate,
   MonitorRow,
+  NotificationRow,
 } from "../db/monitor-repository.ts";
 
 export function escapeHtml(input: string): string {
@@ -148,7 +149,9 @@ const AUTOREFRESH_DEFAULT_SECONDS = "60";
 function autoRefreshControl(): string {
   const options = AUTOREFRESH_OPTIONS
     .map(([seconds, label]) =>
-      `<option value="${seconds}"${seconds === AUTOREFRESH_DEFAULT_SECONDS ? " selected" : ""}>${label}</option>`
+      `<option value="${seconds}"${
+        seconds === AUTOREFRESH_DEFAULT_SECONDS ? " selected" : ""
+      }>${label}</option>`
     )
     .join("");
   return `
@@ -159,7 +162,11 @@ function autoRefreshControl(): string {
 }
 
 function stateBadge(state: string): string {
-  const cls = state === "up" ? "badge-up" : state === "down" ? "badge-down" : "badge-unknown";
+  const cls = state === "up"
+    ? "badge-up"
+    : state === "down"
+    ? "badge-down"
+    : "badge-unknown";
   return `<span class="badge ${cls}">${escapeHtml(state)}</span>`;
 }
 
@@ -171,7 +178,9 @@ function formatMs(ms: number | null): string {
 function resultTitle(result: CheckResultRow): string {
   const status = result.down === 1 ? "down" : "up";
   const suffix = result.message ? `: ${result.message}` : "";
-  return `${result.checked_at} — ${status}${suffix} (${formatMs(result.duration_ms)})`;
+  return `${result.checked_at} — ${status}${suffix} (${
+    formatMs(result.duration_ms)
+  })`;
 }
 
 /** Oldest-to-newest strip of dots, one per result, most recent on the right. */
@@ -180,7 +189,9 @@ function pulseDots(results: CheckResultRow[]): string {
   const dots = ordered
     .map((result) => {
       const cls = result.down === 1 ? "dot-down" : "dot-up";
-      return `<span class="dot ${cls}" title="${escapeHtml(resultTitle(result))}"></span>`;
+      return `<span class="dot ${cls}" title="${
+        escapeHtml(resultTitle(result))
+      }"></span>`;
     })
     .join("");
   return `<div class="pulse">${dots}</div>`;
@@ -202,7 +213,9 @@ export function renderOverviewPage(rows: OverviewRow[]): string {
           <td class="muted">${escapeHtml(monitor.type)}</td>
           <td>${stateBadge(monitor.last_state)}</td>
           <td>${formatMs(aggregate.avgDurationMs)}</td>
-          <td>${recent.length ? pulseDots(recent) : '<span class="muted">—</span>'}</td>
+          <td>${
+        recent.length ? pulseDots(recent) : '<span class="muted">—</span>'
+      }</td>
           <td>${
         monitor.last_checked_at
           ? `<time data-ts="${monitor.last_checked_at}">${monitor.last_checked_at}</time>`
@@ -217,10 +230,14 @@ export function renderOverviewPage(rows: OverviewRow[]): string {
       <thead>
         <tr><th>Service</th><th>Type</th><th>Status</th><th>Avg response</th><th>Last 10</th><th>Last checked</th></tr>
       </thead>
-      <tbody>${body || '<tr><td colspan="6" class="empty">No monitors configured.</td></tr>'}</tbody>
+      <tbody>${
+    body ||
+    '<tr><td colspan="6" class="empty">No monitors configured.</td></tr>'
+  }</tbody>
     </table>`;
 
-  const header = `<div class="page-header"><h1>Monitors</h1>${autoRefreshControl()}</div>`;
+  const header =
+    `<div class="page-header"><h1>Monitors</h1>${autoRefreshControl()}</div>`;
 
   return pageShell("Monitors", `<main class="wrap">${header}${table}</main>`);
 }
@@ -229,6 +246,7 @@ export function renderMonitorDetailPage(
   monitor: MonitorRow,
   aggregate: MonitorAggregate,
   results: CheckResultRow[],
+  notifications: NotificationRow[],
 ): string {
   const uptime = aggregate.totalChecks > 0
     ? `${((aggregate.upChecks / aggregate.totalChecks) * 100).toFixed(2)}%`
@@ -256,23 +274,62 @@ export function renderMonitorDetailPage(
     .map((result) => `
       <tr>
         <td><time data-ts="${result.checked_at}">${result.checked_at}</time></td>
-        <td>${result.down === 1 ? '<span class="badge badge-down">down</span>' : '<span class="badge badge-up">up</span>'}</td>
+        <td>${
+      result.down === 1
+        ? '<span class="badge badge-down">down</span>'
+        : '<span class="badge badge-up">up</span>'
+    }</td>
         <td>${formatMs(result.duration_ms)}</td>
-        <td class="muted">${result.message ? escapeHtml(result.message) : "—"}</td>
+        <td class="muted">${
+      result.message ? escapeHtml(result.message) : "—"
+    }</td>
       </tr>`)
     .join("");
 
   const table = `
     <table>
       <thead><tr><th>Checked at</th><th>Status</th><th>Duration</th><th>Message</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="4" class="empty">No results recorded yet.</td></tr>'}</tbody>
+      <tbody>${
+    rows ||
+    '<tr><td colspan="4" class="empty">No results recorded yet.</td></tr>'
+  }</tbody>
     </table>`;
 
   const header = `
     <div class="page-header">
-      <h1>${escapeHtml(monitor.name)} <span class="muted">(${escapeHtml(monitor.type)})</span></h1>
+      <h1>${escapeHtml(monitor.name)} <span class="muted">(${
+    escapeHtml(monitor.type)
+  })</span></h1>
       ${autoRefreshControl()}
     </div>`;
+
+  const notificationRows = notifications
+    .map((notification) => `
+      <tr>
+        <td><time data-ts="${notification.sent_at}">${notification.sent_at}</time></td>
+        <td>${escapeHtml(notification.endpoint)} <span class="muted">(${
+      escapeHtml(notification.channel)
+    })</span></td>
+        <td class="muted">${escapeHtml(notification.kind)}</td>
+        <td>${
+      notification.ok === 1
+        ? '<span class="badge badge-up">sent</span>'
+        : '<span class="badge badge-down">failed</span>'
+    }</td>
+        <td class="muted">${
+      notification.error ? escapeHtml(notification.error) : "—"
+    }</td>
+      </tr>`)
+    .join("");
+
+  const notificationTable = `
+    <table>
+      <thead><tr><th>Sent at</th><th>Endpoint</th><th>Event</th><th>Result</th><th>Error</th></tr></thead>
+      <tbody>${
+    notificationRows ||
+    '<tr><td colspan="5" class="empty">No notifications sent yet.</td></tr>'
+  }</tbody>
+    </table>`;
 
   const body = `
     <main class="wrap">
@@ -281,6 +338,8 @@ export function renderMonitorDetailPage(
       ${stats}
       <h2>Last ${results.length} result${results.length === 1 ? "" : "s"}</h2>
       ${table}
+      <h2>Notifications</h2>
+      ${notificationTable}
     </main>`;
 
   return pageShell(`${monitor.name} — Monitor`, body);

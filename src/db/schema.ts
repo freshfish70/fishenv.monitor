@@ -1,6 +1,8 @@
 import type { ColumnType, Generated } from "kysely";
+import type { MonitorState } from "../types/monitor.ts";
+import type { NotificationEventKind } from "../types/notification.ts";
 
-export type MonitorState = "up" | "down" | "unknown";
+export type { MonitorState };
 
 export interface MonitorsTable {
   id: string;
@@ -9,6 +11,8 @@ export interface MonitorsTable {
   last_state: ColumnType<MonitorState, MonitorState | undefined, MonitorState>;
   last_checked_at: string | null;
   last_transition_at: string | null;
+  /** Checks in a row that produced `last_state`, including the latest. */
+  consecutive: ColumnType<number, number | undefined, number>;
   updated_at: string;
 }
 
@@ -23,7 +27,22 @@ export interface CheckResultsTable {
   raw_result: string | null;
 }
 
+/** One delivery attempt. Rows are written whether or not the send succeeded. */
+export interface NotificationsTable {
+  id: Generated<number>;
+  monitor_id: string;
+  /** The endpoint's `name`. */
+  endpoint: string;
+  /** The endpoint's channel `type`, e.g. "discord". */
+  channel: string;
+  kind: NotificationEventKind;
+  ok: 0 | 1;
+  error: string | null;
+  sent_at: string;
+}
+
 export interface Database {
   monitors: MonitorsTable;
   check_results: CheckResultsTable;
+  notifications: NotificationsTable;
 }

@@ -1,12 +1,11 @@
 import type {
-  BaseNotificationEndpointConfig,
-  MonitorNotifyContext,
-  NotificationChannel,
-  NotificationMessage,
+  ChannelFactory,
+  NotificationEvent,
 } from "../types/notification.ts";
+import { defineChannel } from "./define-channel.ts";
+import { defaultMessage } from "./format.ts";
 
-export interface SmtpEndpointConfig
-  extends BaseNotificationEndpointConfig<"smtp"> {
+export interface SmtpEndpointConfig {
   host: string;
   port: number;
   username?: string;
@@ -15,29 +14,31 @@ export interface SmtpEndpointConfig
   to: string | string[];
 }
 
-function defaultSendOnDown(
-  _config: SmtpEndpointConfig,
-  ctx: MonitorNotifyContext,
-): NotificationMessage {
-  return { title: `Service is down: ${ctx.name}`, description: ctx.message };
+export interface SmtpMessage {
+  /** Used as the subject line. */
+  title: string;
+  description: string;
+  /** Optional HTML body; `description` stays the plain-text alternative. */
+  html?: string;
 }
 
-function defaultSendOnUp(
+function defaultFormat(
   _config: SmtpEndpointConfig,
-  ctx: MonitorNotifyContext,
-): NotificationMessage {
-  return { title: `Service ${ctx.name} is up again`, description: ctx.message };
+  event: NotificationEvent,
+): SmtpMessage {
+  return defaultMessage(event);
 }
 
 function dispatch(
   _config: SmtpEndpointConfig,
-  _message: NotificationMessage,
+  _message: SmtpMessage,
 ): Promise<void> {
   throw new Error("The smtp notification channel is not implemented yet.");
 }
 
-export const smtpChannel: NotificationChannel<SmtpEndpointConfig> = {
-  defaultSendOnDown,
-  defaultSendOnUp,
-  dispatch,
-};
+export const smtp: ChannelFactory<SmtpEndpointConfig, SmtpMessage> =
+  defineChannel({
+    type: "smtp",
+    defaultFormat,
+    dispatch,
+  });

@@ -1,39 +1,38 @@
 import type {
-  BaseNotificationEndpointConfig,
-  MonitorNotifyContext,
-  NotificationChannel,
-  NotificationMessage,
+  ChannelFactory,
+  NotificationEvent,
 } from "../types/notification.ts";
+import { defineChannel } from "./define-channel.ts";
+import { defaultMessage } from "./format.ts";
 
-export interface TelegramEndpointConfig
-  extends BaseNotificationEndpointConfig<"telegram"> {
+export interface TelegramEndpointConfig {
   botToken: string;
   chatId: string;
 }
 
-function defaultSendOnDown(
-  _config: TelegramEndpointConfig,
-  ctx: MonitorNotifyContext,
-): NotificationMessage {
-  return { title: `Service is down: ${ctx.name}`, description: ctx.message };
+export interface TelegramMessage {
+  title: string;
+  description: string;
+  parseMode?: "Markdown" | "MarkdownV2" | "HTML";
 }
 
-function defaultSendOnUp(
+function defaultFormat(
   _config: TelegramEndpointConfig,
-  ctx: MonitorNotifyContext,
-): NotificationMessage {
-  return { title: `Service ${ctx.name} is up again`, description: ctx.message };
+  event: NotificationEvent,
+): TelegramMessage {
+  return defaultMessage(event);
 }
 
 function dispatch(
   _config: TelegramEndpointConfig,
-  _message: NotificationMessage,
+  _message: TelegramMessage,
 ): Promise<void> {
   throw new Error("The telegram notification channel is not implemented yet.");
 }
 
-export const telegramChannel: NotificationChannel<TelegramEndpointConfig> = {
-  defaultSendOnDown,
-  defaultSendOnUp,
-  dispatch,
-};
+export const telegram: ChannelFactory<TelegramEndpointConfig, TelegramMessage> =
+  defineChannel({
+    type: "telegram",
+    defaultFormat,
+    dispatch,
+  });

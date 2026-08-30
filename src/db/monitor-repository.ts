@@ -4,12 +4,31 @@ import type {
   Database,
   MonitorsTable,
   MonitorState,
+  NotificationsTable,
 } from "./schema.ts";
 import type { IsDownResult } from "../types/monitor.ts";
-import type { CheckResult } from "../monitors/registry.ts";
+import type { NotificationEventKind } from "../types/notification.ts";
+import type { CheckResult } from "../types/result.ts";
 
 export type MonitorRow = Selectable<MonitorsTable>;
 export type CheckResultRow = Selectable<CheckResultsTable>;
+export type NotificationRow = Selectable<NotificationsTable>;
+
+/** A monitor's last-known state and how long it has held it. */
+export interface MonitorStateSnapshot {
+  state: MonitorState;
+  /** Checks in a row that produced `state`. 0 before the first check. */
+  consecutive: number;
+}
+
+export interface RecordNotificationInput {
+  monitorId: string;
+  endpoint: string;
+  channel: string;
+  kind: NotificationEventKind;
+  ok: boolean;
+  error?: string;
+}
 
 export interface MonitorAggregate {
   monitorId: string;
@@ -64,14 +83,14 @@ export class MonitorRepository {
     monitorId: string,
     name: string,
     type: string,
-  ): Promise<MonitorState> {
+  ): Promise<MonitorStateSnapshot> {
     const row = await this.db
       .selectFrom("monitors")
-      .select("last_state")
+      .select(["last_state", "consecutive"])
       .where("id", "=", monitorId)
       .executeTakeFirst();
 
-    if (row) return row.last_state;
+    if (row) return { state: row.last_state, consecutive: row.consecutive };
 
     const now = new Date().toISOString();
     await this.db
@@ -83,12 +102,13 @@ export class MonitorRepository {
         last_state: "unknown",
         last_checked_at: null,
         last_transition_at: null,
+        consecutive: 0,
         updated_at: now,
       })
       .onConflict((oc) => oc.column("id").doNothing())
       .execute();
 
-    return "unknown";
+    return { state: "unknown", consecutive: 0 };
   }
 
   async updateState(monitorId: string, state: MonitorState): Promise<void> {
@@ -104,12 +124,13 @@ export class MonitorRepository {
     monitorId: string,
     isDownResult: IsDownResult,
     result: CheckResult,
+    consecutive: number,
   ): Promise<void> {
     const now = new Date().toISOString();
 
     await this.db
       .updateTable("monitors")
-      .set({ last_checked_at: now, updated_at: now })
+      .set({ last_checked_at: now, consecutive, updated_at: now })
       .where("id", "=", monitorId)
       .execute();
 
@@ -123,6 +144,70 @@ export class MonitorRepository {
         duration_ms: Math.round(result.durationMs),
         raw_result: JSON.stringify(serializeResult(result)),
       })
+      .execute();
+  }
+
+  /** Records one delivery attempt, successful or not. */
+  async recordNotification(input: RecordNotificationInput): Promise<void> {
+    await this.db
+      .insertInto("notifications")
+      .values({
+        monitor_id: input.monitorId,
+        endpoint: input.endpoint,
+        channel: input.channel,
+        kind: input.kind,
+        ok: input.ok ? 1 : 0,
+        error: input.error ?? null,
+        sent_at: new Date().toISOString(),
+      })
+      .execute();
+  }
+
+  /**
+   * When this endpoint was last sent anything for this monitor, successful or
+   * not — a failed send still consumes the cooldown, so a broken webhook can't
+   * turn into a retry loop at check frequency.
+   */
+  async getLastNotifiedAt(
+    monitorId: string,
+    endpoint: string,
+  ): Promise<Date | null> {
+    const row = await this.db
+      .selectFrom("notifications")
+      .select("sent_at")
+      .where("monitor_id", "=", monitorId)
+      .where("endpoint", "=", endpoint)
+      .orderBy("sent_at", "desc")
+      .orderBy("id", "desc")
+      .limit(1)
+      .executeTakeFirst();
+
+    return row ? new Date(row.sent_at) : null;
+  }
+
+  /** Most recent delivery attempts for one monitor, newest first. */
+  async getRecentNotifications(
+    monitorId: string,
+    limit: number,
+  ): Promise<NotificationRow[]> {
+    return await this.db
+      .selectFrom("notifications")
+      .selectAll()
+      .where("monitor_id", "=", monitorId)
+      .orderBy("sent_at", "desc")
+      .orderBy("id", "desc")
+      .limit(limit)
+      .execute();
+  }
+
+  /** Most recent delivery attempts across every monitor, newest first. */
+  async getLatestNotifications(limit: number): Promise<NotificationRow[]> {
+    return await this.db
+      .selectFrom("notifications")
+      .selectAll()
+      .orderBy("sent_at", "desc")
+      .orderBy("id", "desc")
+      .limit(limit)
       .execute();
   }
 
@@ -155,7 +240,9 @@ export class MonitorRepository {
         "message",
         "duration_ms",
         "raw_result",
-        sql<number>`row_number() over (partition by monitor_id order by checked_at desc, id desc)`
+        sql<
+          number
+        >`row_number() over (partition by monitor_id order by checked_at desc, id desc)`
           .as("rn"),
       ]);
 
@@ -219,6 +306,8 @@ export class MonitorRepository {
       FROM check_results
       GROUP BY monitor_id
     `.execute(this.db);
-    return new Map(rows.map((row) => [row.monitor_id, toAggregate(row.monitor_id, row)]));
+    return new Map(
+      rows.map((row) => [row.monitor_id, toAggregate(row.monitor_id, row)]),
+    );
   }
 }

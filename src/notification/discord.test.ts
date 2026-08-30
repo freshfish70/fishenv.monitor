@@ -1,6 +1,6 @@
 import { assertEquals, assertRejects } from "@std/assert";
-import { discordChannel } from "./discord.ts";
-import type { DiscordEndpointConfig } from "./discord.ts";
+import { discord } from "./discord.ts";
+import type { NotificationEvent } from "../types/notification.ts";
 
 function withMockedFetch<T>(
   impl: typeof fetch,
@@ -13,44 +13,91 @@ function withMockedFetch<T>(
   });
 }
 
-const config: DiscordEndpointConfig = {
-  type: "discord",
-  webhookUrl: "https://discord.example.com/webhook",
-};
+const WEBHOOK = "https://discord.example.com/webhook";
 
-Deno.test("discord defaultSendOnDown/defaultSendOnUp message shape", () => {
-  const ctx = { name: "svc", type: "http" as const, message: "boom" };
-  assertEquals(discordChannel.defaultSendOnDown(config, ctx), {
-    title: "Service is down: svc",
-    description: "boom",
+function event(overrides: Partial<NotificationEvent> = {}): NotificationEvent {
+  return {
+    kind: "down",
+    monitor: { id: "svc", name: "svc", type: "http" },
+    message: "boom",
+    state: "down",
+    previousState: "up",
+    checkedAt: new Date(),
+    consecutive: 1,
+    durationMs: 12,
+    result: { status: 500, ok: false, headers: new Headers(), durationMs: 12 },
+    ...overrides,
+  };
+}
+
+Deno.test("the default format titles each event kind and includes the status field", async () => {
+  const endpoint = discord({ webhookUrl: WEBHOOK });
+  const bodies: Record<string, string>[] = [];
+  const capture: typeof fetch = (_input, init) => {
+    bodies.push(JSON.parse(init!.body as string).embeds[0]);
+    return Promise.resolve(new Response(null, { status: 204 }));
+  };
+
+  await withMockedFetch(capture, async () => {
+    await endpoint.notify(event());
+    await endpoint.notify(event({ kind: "up", state: "up" }));
+    await endpoint.notify(event({ kind: "still-down", consecutive: 4 }));
   });
-  assertEquals(discordChannel.defaultSendOnUp(config, ctx), {
-    title: "Service svc is up again",
-    description: "boom",
-  });
+
+  assertEquals(bodies.map((embed) => embed.title), [
+    "Service is down: svc",
+    "Service svc is up again",
+    "Service is still down: svc",
+  ]);
+  assertEquals(bodies[0].description, "boom");
+
+  const fields = bodies[0].fields as unknown as {
+    name: string;
+    value: string;
+  }[];
+  assertEquals(fields.find((field) => field.name === "Status")?.value, "500");
+  // "Consecutive" is noise on a first failure and only shows up on repeats.
+  assertEquals(fields.some((field) => field.name === "Consecutive"), false);
+
+  const repeatFields = bodies[2].fields as unknown as {
+    name: string;
+    value: string;
+  }[];
+  assertEquals(
+    repeatFields.find((field) => field.name === "Consecutive")?.value,
+    "4 checks down",
+  );
 });
 
-Deno.test("discord dispatch posts an embed payload to the webhook url", async () => {
+Deno.test("send() posts an embed payload to the webhook url", async () => {
+  const endpoint = discord({ webhookUrl: WEBHOOK });
   let seenUrl: string | null = null;
-  let seenBody: unknown = null;
+  let seenBody: { embeds: unknown[] } | null = null;
+
   await withMockedFetch(
     (input, init) => {
       seenUrl = input.toString();
       seenBody = JSON.parse(init!.body as string);
       return Promise.resolve(new Response(null, { status: 204 }));
     },
-    () => discordChannel.dispatch(config, { title: "t", description: "d" }),
+    () => endpoint.send({ title: "t", description: "d", color: 0x112233 }),
   );
-  assertEquals(seenUrl, config.webhookUrl);
-  assertEquals(seenBody, { embeds: [{ title: "t", description: "d" }] });
+
+  assertEquals(seenUrl, WEBHOOK);
+  assertEquals(seenBody!.embeds, [{
+    title: "t",
+    description: "d",
+    color: 0x112233,
+  }]);
 });
 
-Deno.test("discord dispatch throws on a non-ok response", async () => {
+Deno.test("dispatch throws on a non-ok response", async () => {
+  const endpoint = discord({ webhookUrl: WEBHOOK });
   await withMockedFetch(
     () => Promise.resolve(new Response(null, { status: 500 })),
     () =>
       assertRejects(
-        () => discordChannel.dispatch(config, { title: "t", description: "d" }),
+        () => endpoint.send({ title: "t", description: "d" }),
         Error,
         "500",
       ),

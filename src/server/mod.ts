@@ -1,17 +1,24 @@
-import { NotFoundError, r } from '@fishenv/http';
-import * as v from 'valibot';
+import { NotFoundError, r } from "@fishenv/http";
+import * as v from "valibot";
 import type {
   CheckResultRow,
   MonitorAggregate,
   MonitorRepository,
   MonitorRow,
-} from '../db/monitor-repository.ts';
-import { renderMonitorDetailPage, renderOverviewPage } from './html.ts';
+  NotificationRow,
+} from "../db/monitor-repository.ts";
+import { renderMonitorDetailPage, renderOverviewPage } from "./html.ts";
 
 const LatestResultsQuerySchema = v.object({
   limit: v.optional(
-    v.pipe(v.string(), v.transform(Number), v.integer(), v.minValue(1), v.maxValue(100)),
-    '20',
+    v.pipe(
+      v.string(),
+      v.transform(Number),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(100),
+    ),
+    "20",
   ),
 });
 
@@ -38,11 +45,26 @@ function toResultJson(result: CheckResultRow) {
   };
 }
 
+function toNotificationJson(notification: NotificationRow) {
+  return {
+    monitorId: notification.monitor_id,
+    endpoint: notification.endpoint,
+    channel: notification.channel,
+    kind: notification.kind,
+    ok: notification.ok === 1,
+    error: notification.error,
+    sentAt: notification.sent_at,
+  };
+}
+
 const OVERVIEW_PULSE_SIZE = 10;
 const DETAIL_RESULT_LIMIT = 100;
+const DETAIL_NOTIFICATION_LIMIT = 50;
 
 function html(body: string): Response {
-  return new Response(body, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+  return new Response(body, {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
 }
 
 function emptyAggregate(monitorId: string): MonitorAggregate {
@@ -56,7 +78,9 @@ function emptyAggregate(monitorId: string): MonitorAggregate {
   };
 }
 
-function groupByMonitor(results: CheckResultRow[]): Map<string, CheckResultRow[]> {
+function groupByMonitor(
+  results: CheckResultRow[],
+): Map<string, CheckResultRow[]> {
   const grouped = new Map<string, CheckResultRow[]>();
   for (const result of results) {
     const list = grouped.get(result.monitor_id);
@@ -69,16 +93,18 @@ function groupByMonitor(results: CheckResultRow[]): Map<string, CheckResultRow[]
 /** Builds the monitor app's HTTP surface: a JSON API under `/api` plus a browsable HTML dashboard. */
 export function createServer(repo: MonitorRepository) {
   const app = r();
-  const api = app.extend({ prefix: '/api' });
+  const api = app.extend({ prefix: "/api" });
 
-  api.get('/health').handle(() => Response.json({ status: 'ok', uptime: performance.now() }));
+  api.get("/health").handle(() =>
+    Response.json({ status: "ok", uptime: performance.now() })
+  );
 
-  api.get('/monitors').handle(async () => {
+  api.get("/monitors").handle(async () => {
     const monitors = await repo.listMonitors();
     return Response.json({ monitors: monitors.map(toMonitorJson) });
   });
 
-  api.get('/monitors/:id').handle(async ({ path }) => {
+  api.get("/monitors/:id").handle(async ({ path }) => {
     const monitor = await repo.getMonitor(path.id);
     if (!monitor) throw new NotFoundError(`Monitor "${path.id}" not found`);
     return Response.json({ monitor: toMonitorJson(monitor) });
@@ -86,14 +112,26 @@ export function createServer(repo: MonitorRepository) {
 
   // Flat, monitor-agnostic feed of recent results, meant for other services to poll.
   api
-    .get('/results')
-    .input('none', { query: LatestResultsQuerySchema })
+    .get("/results")
+    .input("none", { query: LatestResultsQuerySchema })
     .handle(async ({ query }) => {
       const results = await repo.getLatestResults(query.limit);
       return Response.json({ results: results.map(toResultJson) });
     });
 
-  app.get('/').handle(async () => {
+  // Delivery log, so a silent alert can be told apart from one that was
+  // never attempted.
+  api
+    .get("/notifications")
+    .input("none", { query: LatestResultsQuerySchema })
+    .handle(async ({ query }) => {
+      const notifications = await repo.getLatestNotifications(query.limit);
+      return Response.json({
+        notifications: notifications.map(toNotificationJson),
+      });
+    });
+
+  app.get("/").handle(async () => {
     const [monitors, recentResults, aggregates] = await Promise.all([
       repo.listMonitors(),
       repo.getLatestResults(OVERVIEW_PULSE_SIZE),
@@ -110,16 +148,19 @@ export function createServer(repo: MonitorRepository) {
     return html(renderOverviewPage(rows));
   });
 
-  app.get('/monitors/:id').handle(async ({ path }) => {
+  app.get("/monitors/:id").handle(async ({ path }) => {
     const monitor = await repo.getMonitor(path.id);
     if (!monitor) throw new NotFoundError(`Monitor "${path.id}" not found`);
 
-    const [aggregate, results] = await Promise.all([
+    const [aggregate, results, notifications] = await Promise.all([
       repo.getAggregate(path.id),
       repo.getRecentResults(path.id, DETAIL_RESULT_LIMIT),
+      repo.getRecentNotifications(path.id, DETAIL_NOTIFICATION_LIMIT),
     ]);
 
-    return html(renderMonitorDetailPage(monitor, aggregate, results));
+    return html(
+      renderMonitorDetailPage(monitor, aggregate, results, notifications),
+    );
   });
 
   return app;

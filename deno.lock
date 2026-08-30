@@ -1,6 +1,8 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@fishenv/http@^0.0.2": "0.0.2",
+    "jsr:@fishenv/wrq@~0.2.3": "0.2.3",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/async@1": "1.5.0",
     "jsr:@std/data-structures@^1.1.1": "1.1.2",
@@ -9,10 +11,20 @@
     "jsr:@std/internal@^1.0.14": "1.0.14",
     "jsr:@std/path@1": "1.1.6",
     "jsr:@std/path@^1.1.5": "1.1.6",
+    "jsr:@std/yaml@1": "1.2.0",
     "jsr:@valibot/valibot@1": "1.4.2",
     "npm:kysely@0.27": "0.27.6"
   },
   "jsr": {
+    "@fishenv/http@0.0.2": {
+      "integrity": "0ea330fad83ebd92397f203474a7128db05ab8a0258aebc693bb42c9fd6d1a21",
+      "dependencies": [
+        "jsr:@valibot/valibot"
+      ]
+    },
+    "@fishenv/wrq@0.2.3": {
+      "integrity": "dd0f132caf0810b2f74865e32a138fcb1ac8bc44bf9b99f5990e91a6d315dcf2"
+    },
     "@std/assert@1.0.19": {
       "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
       "dependencies": [
@@ -44,6 +56,9 @@
         "jsr:@std/internal@^1.0.14"
       ]
     },
+    "@std/yaml@1.2.0": {
+      "integrity": "20beb41e4983ba3437dbefac62b14061ab058e8a187596f19d28ff9035f6e6cf"
+    },
     "@valibot/valibot@1.4.2": {
       "integrity": "14f7fbb7474a8ade216224062d1e8b23cd17ecbb5176fc23595e846778c4725d"
     }
@@ -55,6 +70,7 @@
   },
   "workspace": {
     "dependencies": [
+      "jsr:@fishenv/http@^0.0.2",
       "jsr:@fishenv/wrq@~0.2.3",
       "jsr:@std/assert@1",
       "jsr:@std/async@1",

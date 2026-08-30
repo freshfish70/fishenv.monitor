@@ -1,0 +1,2 @@
+# The image downloads a release bundle; it never copies from the build context.
+*

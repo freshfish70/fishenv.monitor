@@ -1,5 +1,11 @@
 export { createMonitor } from "./src/monitors/create-monitor.ts";
-export { createNotificationEndpoint } from "./src/notification/create-notification-endpoint.ts";
+export { defineChannel } from "./src/notification/define-channel.ts";
+export { defaultMessage, defaultTitle } from "./src/notification/format.ts";
+
+export { discord } from "./src/notification/discord.ts";
+export { slack } from "./src/notification/slack.ts";
+export { smtp } from "./src/notification/smtp.ts";
+export { telegram } from "./src/notification/telegram.ts";
 
 export type {
   DnsMonitorConfig,
@@ -7,22 +13,42 @@ export type {
   HttpMonitorConfig,
   IsDownResult,
   MonitorConfig,
+  MonitorState,
   MonitorType,
   NormalizedMonitorConfig,
+  NotifyPolicy,
 } from "./src/types/monitor.ts";
 
 export type {
-  BaseNotificationEndpointConfig,
-  MonitorNotifyContext,
+  ChannelFactory,
+  EndpointConfig,
   NotificationChannel,
   NotificationEndpoint,
+  NotificationEvent,
+  NotificationEventKind,
   NotificationMessage,
-  NotificationType,
+  NotificationTarget,
 } from "./src/types/notification.ts";
 
-export type { DnsCheckResult, HttpCheckResult } from "./src/types/result.ts";
+export type {
+  CheckResult,
+  DnsCheckResult,
+  HttpCheckResult,
+} from "./src/types/result.ts";
 
-export type { DiscordEndpointConfig } from "./src/notification/discord.ts";
-export type { SlackEndpointConfig } from "./src/notification/slack.ts";
-export type { SmtpEndpointConfig } from "./src/notification/smtp.ts";
-export type { TelegramEndpointConfig } from "./src/notification/telegram.ts";
+export type {
+  DiscordEndpointConfig,
+  DiscordMessage,
+} from "./src/notification/discord.ts";
+export type {
+  SlackEndpointConfig,
+  SlackMessage,
+} from "./src/notification/slack.ts";
+export type {
+  SmtpEndpointConfig,
+  SmtpMessage,
+} from "./src/notification/smtp.ts";
+export type {
+  TelegramEndpointConfig,
+  TelegramMessage,
+} from "./src/notification/telegram.ts";

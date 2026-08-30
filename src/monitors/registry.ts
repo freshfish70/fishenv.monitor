@@ -1,9 +1,13 @@
 import type { IsDownResult, MonitorConfig } from "../types/monitor.ts";
-import type { DnsCheckResult, HttpCheckResult } from "../types/result.ts";
+import type {
+  CheckResult,
+  DnsCheckResult,
+  HttpCheckResult,
+} from "../types/result.ts";
 import { checkDns, defaultDnsIsDown } from "./dns.ts";
 import { checkHttp, defaultHttpIsDown } from "./http.ts";
 
-export type CheckResult = HttpCheckResult | DnsCheckResult;
+export type { CheckResult };
 
 /** Runs the appropriate checker for `monitor.type`. Single dispatch point — no switch elsewhere. */
 export function check(

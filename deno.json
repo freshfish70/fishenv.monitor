@@ -1,6 +1,6 @@
 {
 	"name": "@fishenv/monitor",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"exports": "./mod.ts",
 	"license": "MIT",
 	"imports": {
@@ -10,7 +10,8 @@
 		"kysely": "npm:kysely@^0.27",
 		"@std/async": "jsr:@std/async@^1",
 		"@std/fs": "jsr:@std/fs@^1",
-		"@std/path": "jsr:@std/path@^1"
+		"@std/path": "jsr:@std/path@^1",
+		"@fishenv/http": "jsr:@fishenv/http@^0.0.2"
 	},
 	"fmt": {
 		"exclude": ["monitor.md"]
@@ -18,11 +19,12 @@
 	"tasks": {
 		"dev": "deno run --watch --allow-read --allow-write --allow-net --allow-env main.ts",
 		"start": "deno run --allow-read --allow-write --allow-net --allow-env main.ts",
-		"check": "deno check mod.ts main.ts",
+		"check": "deno check mod.ts main.ts src/",
 		"test": "deno test --allow-read --allow-write --allow-net",
 		"fmt": "deno fmt",
 		"lint": "deno lint",
 		"compile": "deno compile --allow-read --allow-write --allow-net --allow-env --output fishenv-monitor main.ts",
+		"bundle": "deno bundle --minify main.ts > monitor.js",
 		"publish:check": "deno publish --dry-run"
 	}
 }

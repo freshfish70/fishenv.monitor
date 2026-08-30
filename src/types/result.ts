@@ -12,3 +12,10 @@ export interface DnsCheckResult {
   durationMs: number;
   error?: Error;
 }
+
+/**
+ * Every result shape a checker can produce. Lives here rather than in the
+ * monitor registry so the notification layer can depend on it without
+ * depending on the checkers themselves.
+ */
+export type CheckResult = HttpCheckResult | DnsCheckResult;
