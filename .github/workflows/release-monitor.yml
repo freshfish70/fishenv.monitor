@@ -10,6 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check tag matches deno.json version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(jq -r .version deno.json)"
+          if [ "$tag_version" != "$manifest_version" ]; then
+            echo "::error file=deno.json,line=3::tag ${GITHUB_REF_NAME} implies version ${tag_version}, but deno.json says ${manifest_version}"
+            exit 1
+          fi
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -18,6 +27,7 @@ jobs:
 
   release:
     needs: verify
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -32,7 +42,12 @@ jobs:
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          gh release create "${{ github.ref_name }}" dist/monitor.js \
-            --title "fishenv-monitor v${version}" \
-            --generate-notes
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dist/monitor.js --clobber
+          else
+            gh release create "$tag" dist/monitor.js \
+              --title "fishenv-monitor v${version}" \
+              --generate-notes
+          fi
