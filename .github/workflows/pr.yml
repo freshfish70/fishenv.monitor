@@ -1,0 +1,25 @@
+name: PR
+
+on:
+  pull_request:
+
+# Untrusted code runs in this workflow. It gets no secrets (the `pull_request`
+# trigger withholds them from forks) and the least token we can give it.
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Don't leave the token in .git/config where a later step could use it.
+          persist-credentials: false
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno task check
+      # --frozen: fail rather than silently resolve a dependency the PR added
+      # or changed without also committing deno.lock.
+      - run: deno test --allow-read --allow-write --allow-net --frozen
